@@ -38,7 +38,19 @@
             <div class="form-row">
               <div class="col-md-12">
                 <label for="exampleInputName">Marks Obtained</label>
-                <span>{{ marks }}</span>
+                <!--<span>{{ marks }}</span>-->
+                <table>
+                  <tr>
+                          <th>Name</th>
+                          <th>Mark</th>
+                  </tr>
+                  {% for k, v in marks.items() %}
+                          <tr>
+                                  <td>{{ k }}</td>
+                                  <td>{{ v }}</td>
+                          </tr>
+                  {% endfor %}
+                </table>
               </div>
             </div>
           </div>

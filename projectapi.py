@@ -14,18 +14,18 @@ import re
 import nltk
 from nltk import sent_tokenize,word_tokenize
 from nltk.corpus import wordnet as wn
-from pattern.en import conjugate, lemma, lexeme,PRESENT,SG
+from pattern.text.en import conjugate, lemma, lexeme,PRESENT,SG
 import math
 import os
 
 import sys, json
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/home/ayush/Downloads/key.json"
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
 
 
 
 
 
-project_dir = "/opt/lampp/htdocs/project_be/project/"
+project_dir = "C:/Users/vigne/Desktop/cip/Subjective-answer-evaluation-modified/"
 image_file = project_dir+'a1.png'
 
 client = vision.ImageAnnotatorClient()
@@ -80,7 +80,7 @@ def get_marks(data,image_file):
     string = texts[0].description.replace('\n',' ').lower() #for converting to lower case
     string = re.sub('[^A-Za-z0-9.]+', ' ', string) #for eliminating special character
     
-    print string
+    print(string)
     
     word_list = word_tokenize(string) #for word spliting
     no_of_words = len(word_list)
@@ -90,23 +90,23 @@ def get_marks(data,image_file):
     no_of_sentences = len(sent_tokenize(string))
     if no_of_sentences>expected_no_of_sentences:
         no_of_sentences=expected_no_of_sentences
-    print 'no_of_words',no_of_words
-    print 'no_of_sentences',no_of_sentences
+    print('no_of_words',no_of_words)
+    print('no_of_sentences',no_of_sentences)
     
     for keyword in keywords:
         if(keyword in word_list):
             keywords_matched=keywords_matched+1        
     if keywords_matched>expected_keywords:
         keywords_matched = expected_keywords
-    print 'keywords matched',keywords_matched
+    print ('keywords matched',keywords_matched)
     
     keywords_percentage = 0.55*(keywords_matched/expected_keywords)    
     word_percentage = 0.35*(no_of_words/expected_no_of_words)
     sentence_percentage = 0.10*(no_of_sentences/expected_no_of_sentences)
     
-    print 'keywords_percentage',keywords_percentage
-    print 'word_percentage',word_percentage
-    print 'sentence_percentage',sentence_percentage
+    print ('keywords_percentage',keywords_percentage)
+    print ('word_percentage',word_percentage)
+    print ('sentence_percentage',sentence_percentage)
     
     total_marks = maximum_marks*(keywords_percentage+word_percentage+sentence_percentage)
     total_marks=round(total_marks,1)
@@ -115,12 +115,13 @@ def get_marks(data,image_file):
         total_marks=math.floor(total_marks)
     if(digit%10>5):
         total_marks=math.ceil(total_marks)  
-    print 'total_marks',total_marks
+    print ('total_marks',total_marks)
     return total_marks
 
 
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-from werkzeug import secure_filename
+from werkzeug.utils import secure_filename
+from werkzeug.datastructures import  FileStorage
 app = Flask(__name__)
 img_directory = app.config['UPLOAD_FOLDER'] = 'uploads/'
 
@@ -131,20 +132,51 @@ app.config['ALLOWED_EXTENSIONS'] = set(['png', 'jpg', 'jpeg'])
 def hello_world():
     return render_template('index.html')
 
+
+marks_disp= {}
+
 @app.route('/result', methods=['POST'])
 def get_result():
 
-    files = request.files['image']
-    filename = secure_filename(files.filename)
-    files.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    #files = request.files['image']
+    print(request.form['keywords'])
+    files1 = request.files.getlist('image')
+    #print(files1)
+    for filess in files1:
+        if filess:
+            filename = secure_filename(filess.filename)
+            filess.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))  
+            filess = app.config['UPLOAD_FOLDER']+filename          
+            #print(filess)
+            data = [int(request.form['max_marks']), int(request.form['min_words']), int(request.form['min_sentence']), request.form['keywords']]
+            print(filess)
+            marks = get_marks(data,filess)
+            
+            size = len(filename)
+            if ".png" or ".jpg" in filename:
+                filename = filename[:size-4]
+            else:
+                filename = filename[:size-5] 
+            marks_disp[filename] = marks
+    
+    marks_disp1 = marks_disp.copy()
+    marks_disp.clear()
+    return render_template("result.html", marks=marks_disp1)        
+    
+    
+    
+    
+    
+    #filename = secure_filename(files.filename)
+    #files.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-    files = app.config['UPLOAD_FOLDER']+filename
-    print files
+    #files = app.config['UPLOAD_FOLDER']+filename
+    #print (files)
 
-    if files:
-        print(request.form['keywords'])
-        data = [int(request.form['max_marks']), int(request.form['min_words']), int(request.form['min_sentence']), request.form['keywords']]
+    #if files:
+        #print(request.form['keywords'])
+        #data = [int(request.form['max_marks']), int(request.form['min_words']), int(request.form['min_sentence']), request.form['keywords']]
         
-        marks = get_marks(data,files)
-        return render_template('result.html', marks=marks)
+        #marks = get_marks(data,files)
+        #return render_template('result.html', marks=marks)
 app.run(host='0.0.0.0')
