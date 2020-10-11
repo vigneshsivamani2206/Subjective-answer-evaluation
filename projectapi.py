@@ -17,6 +17,7 @@ from nltk.corpus import wordnet as wn
 from pattern.text.en import conjugate, lemma, lexeme,PRESENT,SG
 import math
 import os
+from difflib import SequenceMatcher
 
 import sys, json
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
@@ -38,6 +39,8 @@ def get_marks(data,image_file):
     
     keywords=[]
     keywords=data[3].split(',')
+
+
     # keywords=['data','mine','database','characterization','knowledge','background','task','classify','associate','visualize','predict','cluster']
     expected_keywords = len(keywords)
     
@@ -47,6 +50,21 @@ def get_marks(data,image_file):
     #expected_no_of_sentences = 15
     expected_no_of_sentences = data[2]
     
+
+    print()    
+    print("----------------------------------------------")
+    print()
+    
+    spaced_keywords=[]
+    for word in keywords:
+        if ' ' in word:
+            spaced_keywords.append(word)
+            keywords.remove(word)
+    
+    print(spaced_keywords)
+    print(keywords)
+
+
     # extended_keywords = []
     # for word in keywords:
     #     for syn in wn.synsets(word):
@@ -55,7 +73,7 @@ def get_marks(data,image_file):
     
     forms = [] #We'll store the derivational forms in a set to eliminate duplicates
     for word in keywords:
-        for alemma in wn.lemmas(word): #for each "happy" lemma in WordNet
+        for alemma in wn.lemmas(word): #for each "alemma" lemma in WordNet
             forms.append(alemma.name()) #add the lemma itself
             for related_lemma in alemma.derivationally_related_forms(): #for each related lemma
                 forms.append(related_lemma.name()) #add the related lemma
@@ -64,14 +82,13 @@ def get_marks(data,image_file):
     for word in keywords:
         verb.extend(lexeme(word))
     
-    # keywords.extend(extended_keywords)
     keywords.extend(forms)
     keywords.extend(verb)
     
     keywords =  [x.lower() for x in keywords]
     keywords = list(set(keywords))
     
-    
+    print()
     print("----------------------------------------------")
     print()
     print(keywords)
@@ -84,40 +101,58 @@ def get_marks(data,image_file):
     response = client.text_detection(image=image)
     texts = response.text_annotations
     string = texts[0].description.replace('\n',' ').lower() #for converting to lower case
-    string = re.sub('[^A-Za-z0-9\']+', ' ', string) #for eliminating special character
+    string = re.sub('[^A-Za-z0-9.:\']+', ' ', string) #for eliminating special character
 
     #here pyenchant is called
     print("-----------------------------------------------")
     print()
     print(string)
     print()
-    print("------------------------------------------------")
+   
 
     word_list = word_tokenize(string) #for word spliting
     no_of_words = len(word_list)
     if no_of_words>expected_no_of_words:
         no_of_words=expected_no_of_words
     
-    no_of_sentences = len(sent_tokenize(string))
+    sent_list = sent_tokenize(string)
+   
+    print(sent_list)
+    print()
+    print("------------------------------------------------")
+    print()
+
+
+    no_of_sentences = len(sent_list)
     if no_of_sentences>expected_no_of_sentences:
         no_of_sentences=expected_no_of_sentences
-    print('no_of_words',no_of_words)
-    print('no_of_sentences',no_of_sentences)
+
+    print('no_of_words:',no_of_words)
+    print('no_of_sentences:',no_of_sentences)
     
+    list_of_matched_keywords=[]
     for keyword in keywords:
         if(keyword in word_list):
-            keywords_matched=keywords_matched+1        
+            keywords_matched=keywords_matched+1
+            list_of_matched_keywords.append(keyword) 
+    for sent in spaced_keywords:
+        for sentence in sent_list:
+            match_ratio = similar(sentence, sent)
+            if match_ratio > 0.4:
+                keywords_matched=keywords_matched+1
+                list_of_matched_keywords.append(sent)      
     if keywords_matched>expected_keywords:
         keywords_matched = expected_keywords
-    print ('keywords matched',keywords_matched)
+    print ('no of keywords matched:',keywords_matched)
+    print('keywords matched: ',list_of_matched_keywords)
     
     keywords_percentage = 0.55*(keywords_matched/expected_keywords)    
     word_percentage = 0.35*(no_of_words/expected_no_of_words)
     sentence_percentage = 0.10*(no_of_sentences/expected_no_of_sentences)
     
-    print ('keywords_percentage',keywords_percentage)
-    print ('word_percentage',word_percentage)
-    print ('sentence_percentage',sentence_percentage)
+    print ('keywords_percentage:',keywords_percentage)
+    print ('word_percentage:',word_percentage)
+    print ('sentence_percentage:',sentence_percentage)
     
     total_marks = maximum_marks*(keywords_percentage+word_percentage+sentence_percentage)
     total_marks=round(total_marks,1)
@@ -126,11 +161,17 @@ def get_marks(data,image_file):
         total_marks=math.floor(total_marks)
     if(digit%10>5):
         total_marks=math.ceil(total_marks)  
-    print ('total_marks',total_marks)
+    print ('total_marks:',total_marks)
+
     print()
     print("(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)")
     print()
     return total_marks
+
+
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+
 
 
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
@@ -153,7 +194,7 @@ marks_disp= {}
 def get_result():
 
     #files = request.files['image']
-    print(request.form['keywords'])
+    #print(request.form['keywords'])
     files1 = request.files.getlist('image')
     #print(files1)
     for filess in files1:
@@ -163,7 +204,13 @@ def get_result():
             filess = app.config['UPLOAD_FOLDER']+filename          
             #print(filess)
             data = [int(request.form['max_marks']), int(request.form['min_words']), int(request.form['min_sentence']), request.form['keywords']]
+            
+            print()
+            print()
+            print("(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)")
+            print()
             print(filess)
+            
             marks = get_marks(data,filess)
             
             size = len(filename)
