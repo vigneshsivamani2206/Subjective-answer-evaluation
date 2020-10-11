@@ -55,9 +55,9 @@ def get_marks(data,image_file):
     
     forms = [] #We'll store the derivational forms in a set to eliminate duplicates
     for word in keywords:
-        for happy_lemma in wn.lemmas(word): #for each "happy" lemma in WordNet
-            forms.append(happy_lemma.name()) #add the lemma itself
-            for related_lemma in happy_lemma.derivationally_related_forms(): #for each related lemma
+        for alemma in wn.lemmas(word): #for each "happy" lemma in WordNet
+            forms.append(alemma.name()) #add the lemma itself
+            for related_lemma in alemma.derivationally_related_forms(): #for each related lemma
                 forms.append(related_lemma.name()) #add the related lemma
     
     verb=[]
@@ -70,7 +70,13 @@ def get_marks(data,image_file):
     
     keywords =  [x.lower() for x in keywords]
     keywords = list(set(keywords))
-    # print(keywords)
+    
+    
+    print("----------------------------------------------")
+    print()
+    print(keywords)
+    print()
+
     with io.open(image_file, 'rb') as image_file:
         content = image_file.read()
     image = vision.types.Image(content=content)
@@ -78,10 +84,15 @@ def get_marks(data,image_file):
     response = client.text_detection(image=image)
     texts = response.text_annotations
     string = texts[0].description.replace('\n',' ').lower() #for converting to lower case
-    string = re.sub('[^A-Za-z0-9.]+', ' ', string) #for eliminating special character
-    
+    string = re.sub('[^A-Za-z0-9\']+', ' ', string) #for eliminating special character
+
+    #here pyenchant is called
+    print("-----------------------------------------------")
+    print()
     print(string)
-    
+    print()
+    print("------------------------------------------------")
+
     word_list = word_tokenize(string) #for word spliting
     no_of_words = len(word_list)
     if no_of_words>expected_no_of_words:
@@ -116,6 +127,9 @@ def get_marks(data,image_file):
     if(digit%10>5):
         total_marks=math.ceil(total_marks)  
     print ('total_marks',total_marks)
+    print()
+    print("(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)(^-^)")
+    print()
     return total_marks
 
 
@@ -180,3 +194,5 @@ def get_result():
         #marks = get_marks(data,files)
         #return render_template('result.html', marks=marks)
 app.run(host='0.0.0.0')
+
+
