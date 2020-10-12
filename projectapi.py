@@ -18,6 +18,7 @@ from pattern.text.en import conjugate, lemma, lexeme,PRESENT,SG
 import math
 import os
 from difflib import SequenceMatcher
+import enchant
 
 import sys, json
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
@@ -59,7 +60,8 @@ def get_marks(data,image_file):
     for word in keywords:
         if ' ' in word:
             spaced_keywords.append(word)
-            keywords.remove(word)
+    for word in spaced_keywords:
+        keywords.remove(word)        
     
     print(spaced_keywords)
     print(keywords)
@@ -101,17 +103,19 @@ def get_marks(data,image_file):
     response = client.text_detection(image=image)
     texts = response.text_annotations
     string = texts[0].description.replace('\n',' ').lower() #for converting to lower case
-    string = re.sub('[^A-Za-z0-9.:\']+', ' ', string) #for eliminating special character
+    string = re.sub('[^A-Za-z0-9.]+', ' ', string) #for eliminating special character
 
     #here pyenchant is called
     print("-----------------------------------------------")
     print()
     print(string)
     print()
-   
 
     word_list = word_tokenize(string) #for word spliting
     no_of_words = len(word_list)
+    word_list = word_enchant(word_list)
+
+
     if no_of_words>expected_no_of_words:
         no_of_words=expected_no_of_words
     
@@ -137,17 +141,21 @@ def get_marks(data,image_file):
             list_of_matched_keywords.append(keyword) 
     for sent in spaced_keywords:
         for sentence in sent_list:
-            match_ratio = similar(sentence, sent)
-            if match_ratio > 0.4:
+            if sent in sentence:
                 keywords_matched=keywords_matched+1
-                list_of_matched_keywords.append(sent)      
+                list_of_matched_keywords.append(sent)  
+            else:
+                match_ratio = similar(sentence, sent)
+                if match_ratio > 0.4:
+                    keywords_matched=keywords_matched+1
+                    list_of_matched_keywords.append(sent)      
     if keywords_matched>expected_keywords:
         keywords_matched = expected_keywords
     print ('no of keywords matched:',keywords_matched)
     print('keywords matched: ',list_of_matched_keywords)
     
-    keywords_percentage = 0.55*(keywords_matched/expected_keywords)    
-    word_percentage = 0.35*(no_of_words/expected_no_of_words)
+    keywords_percentage = 0.60*(keywords_matched/expected_keywords)    
+    word_percentage = 0.30*(no_of_words/expected_no_of_words)
     sentence_percentage = 0.10*(no_of_sentences/expected_no_of_sentences)
     
     print ('keywords_percentage:',keywords_percentage)
@@ -172,6 +180,29 @@ def get_marks(data,image_file):
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
+def word_enchant(word_list):
+    enchanted_list=[]
+    enchantable_words=[]
+    enchanted_words=[]
+    d=enchant.Dict("en_US")
+    for word in word_list:
+        enchanted_list.append(word)
+        if d.check(word) == False:
+            enchantable_words.append(word)
+            a = set(d.suggest(word))
+            max_ratio=0
+            proper_word=''
+            for b in a:
+                tmp = SequenceMatcher(None, word, b).ratio()
+                if tmp > max_ratio:
+                    proper_word=b
+                    max_ratio=tmp
+            enchanted_words.append(proper_word)
+            enchanted_list.append(proper_word)
+    print(enchantable_words)
+    print(enchanted_words)
+    print()
+    return enchanted_list
 
 
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
