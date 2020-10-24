@@ -1,12 +1,3 @@
-# # try____________________________________________________
-
-
-# # Generate some data to send to PHP
-# #result = {'status': 'Yes!'}
-
-# # Send it to stdout (to PHP)
-# #print json.dumps(1)
-# # try___________________________________________________
 
 import io
 from google.cloud import vision
@@ -14,6 +5,7 @@ import re
 import nltk
 from nltk import sent_tokenize,word_tokenize
 from nltk.corpus import wordnet as wn
+from nltk.corpus import stopwords
 from pattern.text.en import conjugate, lemma, lexeme,PRESENT,SG
 import math
 import os
@@ -23,7 +15,18 @@ import enchant
 import sys, json
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
 
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from werkzeug.utils import secure_filename
+from werkzeug.datastructures import  FileStorage
 
+import sqlite3
+from sqlite3 import Error
+
+import smtplib
+
+
+
+app = Flask(__name__)
 
 
 
@@ -39,7 +42,7 @@ def get_marks(data,image_file):
     maximum_marks = data[0]
     
     keywords=[]
-    keywords=data[3].split(',')
+    keywords=data[3].copy()
 
 
     # keywords=['data','mine','database','characterization','knowledge','background','task','classify','associate','visualize','predict','cluster']
@@ -98,6 +101,7 @@ def get_marks(data,image_file):
 
     with io.open(image_file, 'rb') as image_file:
         content = image_file.read()
+    image_file.close()
     image = vision.types.Image(content=content)
     
     response = client.text_detection(image=image)
@@ -205,14 +209,56 @@ def word_enchant(word_list):
     return enchanted_list
 
 
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-from werkzeug.utils import secure_filename
-from werkzeug.datastructures import  FileStorage
-app = Flask(__name__)
+def create_connection(db_file):
+    """ create a database connection to a SQLite database """
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+    except Error as e:
+        print(e)
+    return conn
+
+
+def select_all_data(conn):
+    """
+    Query all rows in the tasks table
+    :param conn: the Connection object
+    :return:
+    """
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM student_mail")
+    rows = cur.fetchall()
+    print(rows)
+    return rows
+
+MY_ADDRESS = 'vigneshsivamani2206@gmail.com'
+PASSWORD = 'rocketleague'
+
+def send_emails(rows,marks_disp):
+    message = """From:<vigneshsivamani2206@gmail.com>
+    To:<{email}>
+    Subject: SMTP Marks
+
+    You have scored {marks} marks.
+    """
+    
+    for (rollno,name,mail) in rows:
+        s = smtplib.SMTP('smtp.gmail.com',587)
+        s.starttls()
+        s.login(MY_ADDRESS,PASSWORD)
+        txt = message.format(email=mail,marks=marks_disp[name])
+        s.sendmail(MY_ADDRESS, mail, txt) 
+        #print(txt)
+        s.quit()
+    
+
+
+
+
 img_directory = app.config['UPLOAD_FOLDER'] = 'uploads/'
+img_directory1 = app.config['UPLOAD_FOLDERS'] = 'uploadss/'
 
 app.config['ALLOWED_EXTENSIONS'] = set(['png', 'jpg', 'jpeg'])
-
 
 @app.route('/')
 def hello_world():
@@ -224,17 +270,98 @@ marks_disp= {}
 @app.route('/result', methods=['POST'])
 def get_result():
 
-    #files = request.files['image']
-    #print(request.form['keywords'])
     files1 = request.files.getlist('image')
     #print(files1)
+    keywordss=request.form['keywords'].split(',')
+    
+    counter=0
+    a_words=0
+    a_sents=0
+    total_text=''
+    for filesss in files1:
+        if filesss:
+            filename = secure_filename(filesss.filename)
+            #filesss.save(os.path.join(app.config['UPLOAD_FOLDERS'], filename))  
+            filesss = app.config['UPLOAD_FOLDERS']+filename
+            
+            with io.open(filesss, 'rb') as image_file:
+                content = image_file.read()
+            image = vision.types.Image(content=content)
+    
+            response = client.text_detection(image=image)
+            texts = response.text_annotations
+            strings = texts[0].description.replace('\n',' ').lower() #for converting to lower case
+            strings = re.sub('[^A-Za-z0-9.]+', ' ', strings) #for eliminating special character 
+            total_text= total_text+strings
+            #strings = getstring(filesss)
+            list1 = word_tokenize(strings)
+            list2 = sent_tokenize(strings)
+            a_words=a_words+len(list1)
+            a_sents=a_sents+len(list2)
+            counter=counter+1
+
+    text_tokens = word_tokenize(total_text)
+    tokens_without_sw = [word for word in text_tokens if not word in stopwords.words()]
+    pos_tagged_words=nltk.pos_tag(tokens_without_sw)
+    needed_words_tag=[(word,pos) for (word,pos) in pos_tagged_words if pos=='NN' or pos=='NNP' or pos=='NNS' or pos=='NNPS' or pos=='VB' or pos=='VBN' or pos=='VBP' or pos=='VBZ' or pos=='VBD' or pos=='VBG']
+    needed_words=[word for (word,pos) in needed_words_tag]
+    fdist1 = nltk.FreqDist(needed_words)
+    fdist2=fdist1.most_common(5)
+    print()
+    print("-------start of session--------")
+    print()
+    print (fdist2)
+
+    for (word,count) in fdist2:
+        if word not in keywordss:
+            print()
+            print(word,count)
+            val = int(input("Enter your choice: 1 to consider the word as a keyword or 0 to leave it:"))
+            if val==1:
+                keywordss.append(word)
+
+
+    print()
+    print(keywordss)
+    print()
+    #print(needed_words)
+    
+    a_words=a_words/counter
+    a_sents=a_sents/counter
+
+    e_words=int(request.form['min_words'])
+    e_sents=int(request.form['min_sentence'])
+
+    print("which to consider:")
+    print("expected no of words is:",e_words)
+    print("average no of words is:",int(a_words))
+    val = int(input("Enter your choice: 1 for expected 0 for average: "))
+    if val==1:
+        a_words=int(e_words)
+    else:
+        a_words=int(a_words)
+    
+    print("\nwhich to consider:")
+    print("expected no of sentences is:",e_sents)
+    print("average no of sentences is:",int(a_sents))
+    val = int(input("Enter your choice: 1 for expected 0 for average: "))
+    if val==1:
+        a_sents=int(e_sents)
+    else:
+        a_sents=int(a_sents)
+
+
+
+    
+    
     for filess in files1:
         if filess:
             filename = secure_filename(filess.filename)
             filess.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))  
             filess = app.config['UPLOAD_FOLDER']+filename          
             #print(filess)
-            data = [int(request.form['max_marks']), int(request.form['min_words']), int(request.form['min_sentence']), request.form['keywords']]
+            
+            data = [int(request.form['max_marks']), a_words, a_sents, keywordss]
             
             print()
             print()
@@ -251,26 +378,25 @@ def get_result():
                 filename = filename[:size-5] 
             marks_disp[filename] = marks
     
+    
+    
     marks_disp1 = marks_disp.copy()
+
+
+    conn = create_connection(r"C:\sqlite\db\studentmail.db")
+    with conn:
+        print("querrying details")
+        print()
+        rows = select_all_data(conn)
+    
+    send_emails(rows,marks_disp1)
+
+    print()
+    print("----------end of session------------")
+
+
     marks_disp.clear()
     return render_template("result.html", marks=marks_disp1)        
-    
-    
-    
-    
-    
-    #filename = secure_filename(files.filename)
-    #files.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-
-    #files = app.config['UPLOAD_FOLDER']+filename
-    #print (files)
-
-    #if files:
-        #print(request.form['keywords'])
-        #data = [int(request.form['max_marks']), int(request.form['min_words']), int(request.form['min_sentence']), request.form['keywords']]
-        
-        #marks = get_marks(data,files)
-        #return render_template('result.html', marks=marks)
 app.run(host='0.0.0.0')
 
 

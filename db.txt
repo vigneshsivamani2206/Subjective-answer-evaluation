@@ -1,0 +1,18 @@
+CREATE TABLE [IF NOT EXISTS] [schema_name].table_name (
+	column_1 data_type PRIMARY KEY,
+   	column_2 data_type NOT NULL,
+	column_3 data_type DEFAULT 0,
+	table_constraints
+) [WITHOUT ROWID];
+
+
+CREATE TABLE student_mail (
+	roll_no INTEGER PRIMARY KEY,
+	name TEXT NOT NULL,
+	email TEXT NOT NULL UNIQUE
+);
+
+insert into student_mail (roll_no,name,email) VALUES (123456,"deepak","vigneshsivamani.n@gmail.com");
+insert into student_mail (roll_no,name,email) VALUES (1234567,"vignesh","vigneshsivamani2206@gmail.com");
+insert into student_mail (roll_no,name,email) VALUES (12345678,"vinoth","hellrocker2206@gmail.com");
+ 
